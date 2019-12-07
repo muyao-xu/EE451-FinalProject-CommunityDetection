@@ -1,13 +1,10 @@
-#include "PLP.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <time.h>
 #include <omp.h>
-
-
-
+#include <unordered_map>
 
 using namespace std;
 
@@ -36,117 +33,87 @@ vector<int>* readGraph(const string& filename) {
         }
         node++;
     }
-
-    // for (int i=1; i<n+1; i++) {
-    //     cout << i << ": ";
-    //     for (int j=0; j<adjList[i].size(); j++) {
-    //         cout << adjList[i][j] << " ";
-    //     }
-    //     cout << endl;
-    // }
     return adjList;
 }
 
 int main() {
-    vector<int>* adjList = readGraph("input.dat");
+    string filename = "input.graph";
+    int N = 8;
+
+    vector<int>* adjList = readGraph(filename);
     int* labels = new int[numNodes+1];
     bool* active = new bool[numNodes+1];
+    int maxIterations = 1000;
     for (int i=1; i<=numNodes; i++) {
         labels[i] = i;
         active[i] = true;
     }
-
-
+    
+    omp_set_num_threads(N);
     // start measuring time
     struct timespec start, stop;
 	double time;
 	if( clock_gettime(CLOCK_REALTIME, &start) == -1) { perror("clock gettime");}
 
 
-    // int numUpdates = numNodes;
-    // while (numUpdates > numNodes/1e5) {
-    //     numUpdates = 0;
-    //     int* newLabels = new int[numNodes+1];
-    //     for (int i=1; i<=numNodes; i++) {
-    //         newLabels[i] = labels[i];
-    //     }
-
-    //     #pragma omp parallel for schedule(guided)
-    //     for (int i=1; i<=numNodes; i++) {
-    //         if (active[i] && !adjList[i].empty()) {
-    //             // find the most popular label
-    //             int* labelWeights = new int[numNodes+1];
-    //             for (int i=1; i<=numNodes; i++) {
-    //                 labelWeights[i] = 0;
-    //             }
-    //             vector<int> neighbors = adjList[i];
-    //             for (int j=0; j<neighbors.size(); j++) {
-    //                 labelWeights[neighbors[j]] ++; 
-    //             }
-    //             int maxWeight = -1;
-    //             int maxLabel = -1;
-    //             for (int j=1; j<=numNodes; j++) {
-    //                 if (labelWeights[j] > maxWeight) {
-    //                     maxWeight = labelWeights[j];
-    //                     maxLabel = j;
-    //                 }
-    //             }
-    //             if (maxLabel == labels[i]) {
-    //                 active[i] = false;
-    //             }
-    //             else {
-    //                 numUpdates++;
-    //                 newLabels[i] = maxLabel;
-    //             }
-    //             delete[] labelWeights;
-    //         }
-    //     }
-    //     delete[] labels;
-    //     labels = newLabels;
-    // }
-
-    // serial implementation
     int numUpdates = numNodes;
     int iterations = 0;
-    while (numUpdates > numNodes/1e5) {
-        cout << "iteration: " << iterations << endl;
+    while (numUpdates > numNodes/1e3 && iterations <= maxIterations) {
         numUpdates = 0;
+        cout << "iteration: " << iterations << endl;
+        iterations++;
         int* newLabels = new int[numNodes+1];
-        for (int i=1; i<=numNodes; i++) {
-            newLabels[i] = labels[i];
-        }
-        for (int i=1; i<=numNodes; i++) {
-            if (active[i] && !adjList[i].empty()) {
-                // find the most popular label
-                int* labelWeights = new int[numNodes+1];
-                for (int i=1; i<=numNodes; i++) {
-                    labelWeights[i] = 0;
-                }
-                vector<int> neighbors = adjList[i];
-                for (int j=0; j<neighbors.size(); j++) {
-                    labelWeights[neighbors[j]] ++; 
-                }
-                int maxWeight = -1;
-                int maxLabel = -1;
-                for (int j=1; j<=numNodes; j++) {
-                    if (labelWeights[j] > maxWeight) {
-                        maxWeight = labelWeights[j];
-                        maxLabel = j;
+
+        int tid;
+        #pragma omp parallel shared(numUpdates, labels, newLabels, numNodes) private(tid) 
+        {
+            tid = omp_get_thread_num();
+            // cout << "tid: " << tid << endl;
+            #pragma omp for schedule(guided)
+            for (int i=1; i<=numNodes; i++) {
+                // cout << "tid " << tid << ": " << i << endl;
+                if (active[i] && !adjList[i].empty()) {
+                    // cout << "here " << i << " " << labels[i] << endl;
+                    // find the most popular label
+                    int* labelWeights = new int[numNodes+1];
+                    for (int i=1; i<=numNodes; i++) {
+                        labelWeights[i] = 0;
                     }
+                    vector<int> neighbors = adjList[i];
+                    unordered_map<int, int> labelMap;
+                    for (int j=0; j<neighbors.size(); j++) {
+                        int l = labels[neighbors[j]];
+                        labelMap[l]++;
+                    }
+
+                    int maxWeight = -1;
+                    int maxLabel = -1;
+                    for (auto l : labelMap) { 
+                        if (maxWeight < l.second) { 
+                            maxLabel = l.first; 
+                            maxWeight = l.second; 
+                        } 
+                    } 
+                    if (maxLabel == labels[i]) {
+                        active[i] = false;
+                        newLabels[i] = labels[i];
+                        // cout << "new label for node" << i << endl;
+                    }
+                    else {
+                        numUpdates++;
+                        newLabels[i] = maxLabel;
+                         for (int j=0; j<neighbors.size(); j++) {
+                            active[neighbors[j]] = true;
+                        }
+                    }
+                    delete[] labelWeights;
                 }
-                if (maxLabel == labels[i]) {
-                    active[i] = false;
-                }
-                else {
-                    numUpdates++;
-                    newLabels[i] = maxLabel;
-                }
-                delete[] labelWeights;
             }
         }
+        // print out new labels
         delete[] labels;
         labels = newLabels;
-        iterations++;
+        cout << "updates: " << numUpdates << endl;
     }
 
     // measure the end time here
@@ -158,9 +125,9 @@ int main() {
     ofstream outFile;
     outFile.open("output.dat");
 
-    // for (int i=1; i<=numNodes; i++) {
-    //     outFile << i << " " << labels[i] << endl;
-    // }
+    for (int i=1; i<=numNodes; i++) {
+        outFile << i << " " << labels[i] << endl;
+    }
     outFile.close();
     
     return 0;
