@@ -41,12 +41,11 @@ int main(int argc, char* argv[]) {
     string filename = argv[1];
     int N;
     ss >> N;
-    cout << filename << " " << N << endl; 
 
     vector<int>* adjList = readGraph(filename);
     int* labels = new int[numNodes+1];
     bool* active = new bool[numNodes+1];
-    int maxIterations = 1000;
+    int maxIterations = 10000;
     for (int i=1; i<=numNodes; i++) {
         labels[i] = i;
         active[i] = true;
@@ -63,25 +62,16 @@ int main(int argc, char* argv[]) {
     int iterations = 0;
     while (numUpdates > numNodes/1e3 && iterations <= maxIterations) {
         numUpdates = 0;
-        cout << "iteration: " << iterations << endl;
+        // cout << "iteration: " << iterations << endl;
         iterations++;
-        int* newLabels = new int[numNodes+1];
 
-        int tid;
-        #pragma omp parallel shared(numUpdates, labels, newLabels, numNodes) private(tid) 
+        #pragma omp parallel shared(numUpdates, labels, numNodes) 
         {
-            tid = omp_get_thread_num();
-            // cout << "tid: " << tid << endl;
             #pragma omp for schedule(guided)
             for (int i=1; i<=numNodes; i++) {
                 // cout << "tid " << tid << ": " << i << endl;
                 if (active[i] && !adjList[i].empty()) {
-                    // cout << "here " << i << " " << labels[i] << endl;
                     // find the most popular label
-                    int* labelWeights = new int[numNodes+1];
-                    for (int i=1; i<=numNodes; i++) {
-                        labelWeights[i] = 0;
-                    }
                     vector<int> neighbors = adjList[i];
                     unordered_map<int, int> labelMap;
                     for (int j=0; j<neighbors.size(); j++) {
@@ -99,24 +89,18 @@ int main(int argc, char* argv[]) {
                     } 
                     if (maxLabel == labels[i]) {
                         active[i] = false;
-                        newLabels[i] = labels[i];
-                        // cout << "new label for node" << i << endl;
                     }
                     else {
                         numUpdates++;
-                        newLabels[i] = maxLabel;
+                        labels[i] = maxLabel;
                          for (int j=0; j<neighbors.size(); j++) {
                             active[neighbors[j]] = true;
                         }
                     }
-                    delete[] labelWeights;
                 }
             }
         }
-        // print out new labels
-        delete[] labels;
-        labels = newLabels;
-        cout << "updates: " << numUpdates << endl;
+        // cout << "updates: " << numUpdates << endl;
     }
 
     // measure the end time here
