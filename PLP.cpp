@@ -36,9 +36,12 @@ vector<int>* readGraph(const string& filename) {
     return adjList;
 }
 
-int main() {
-    string filename = "input.graph";
-    int N = 8;
+int main(int argc, char* argv[]) {
+    stringstream ss(argv[2]);
+    string filename = argv[1];
+    int N;
+    ss >> N;
+    cout << filename << " " << N << endl; 
 
     vector<int>* adjList = readGraph(filename);
     int* labels = new int[numNodes+1];

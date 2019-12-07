@@ -4,7 +4,7 @@
 #include <sstream>
 #include <vector>
 #include <time.h>
-#include <omp.h>
+
 
 using namespace std;
 
@@ -37,8 +37,13 @@ vector<int>* readGraph(const string& filename) {
     return adjList;
 }
 
-int main() {
-    string filename = "input.dat"
+int main(int arvc, char* argv[]) {
+    stringstream ss(argv[2]);
+    string filename = argv[1];
+    int N;
+    ss >> N;
+    cout << filename << " " << N << endl; 
+
     vector<int>* adjList = readGraph(filename);
     int* labels = new int[numNodes+1];
     bool* active = new bool[numNodes+1];
