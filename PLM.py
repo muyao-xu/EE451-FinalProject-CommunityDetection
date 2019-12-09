@@ -87,5 +87,5 @@ def OUTQ(g, nprocs, mod_res, memship_res):
 filename = "Enter File Name Here"
 G = nk.readGraph(filename, nk.Format.METIS)
 maxiteration = 10000;
-plm = PLM(G, 100000)
+plm = PLM(G, maxiteration)
 print(plm.membership)
